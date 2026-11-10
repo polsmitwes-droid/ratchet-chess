@@ -20,7 +20,13 @@
       --highlight: rgba(212, 163, 89, 0.45);
       --threat: rgba(217, 78, 52, 0.7);
     }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; user-select: none; }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
     body {
       background: var(--bg-main);
       color: #ccc;
@@ -31,7 +37,7 @@
       justify-content: space-between;
       height: 100dvh;
       overflow: hidden;
-      padding: 6px 4px;
+      padding: 8px 6px;
     }
     header, footer { width: 100%; max-width: 420px; }
     .hud {
@@ -68,39 +74,46 @@
       max-width: 420px;
     }
     #board-wrap {
-      width: 100vw;
-      max-width: 420px;
-      height: 100vw;
-      max-height: 420px;
+      width: 100%;
+      max-width: 400px;
+      aspect-ratio: 1 / 1;
       position: relative;
       background: #0f1012;
       border: 3px solid #1c1d21;
       box-shadow: inset 0 0 10px #000;
+      overflow: hidden;
     }
     #board {
       display: grid;
-      grid-template-columns: repeat(8, 1fr);
-      grid-template-rows: repeat(8, 1fr);
-      width: 100%; height: 100%;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      grid-template-rows: repeat(8, minmax(0, 1fr));
+      width: 100%;
+      height: 100%;
     }
     .sq {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      min-width: 0;
       display: flex;
       justify-content: center;
       align-items: center;
       position: relative;
-      font-size: calc(100vw / 9.6);
+      font-size: calc(100vw / 10.5);
+      line-height: 1;
       cursor: pointer;
+      overflow: hidden;
     }
-    @media (min-width: 420px) { .sq { font-size: 42px; } }
+    @media (min-width: 420px) { .sq { font-size: 38px; } }
     .sq.dark { background-color: var(--sq-dark); }
     .sq.light { background-color: var(--sq-light); }
     .sq.selected { background-color: var(--highlight) !important; }
     .sq.target-move::after {
       content: '';
       position: absolute;
-      width: 26%;
-      height: 26%;
-      background: rgba(0, 0, 0, 0.4);
+      width: 24%;
+      height: 24%;
+      background: rgba(0, 0, 0, 0.45);
       border-radius: 50%;
     }
     .sq.problem-zone {
@@ -466,28 +479,41 @@
     btnValve.textContent = `КЛАПАН (${currentEval > 0 ? '+' : ''}${currentEval.toFixed(1)})`;
   }
 
+  // Создаем DOM клеток один раз без полной очистки
+  const cellMap = {};
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const sqName = `${String.fromCharCode(97 + c)}${8 - r}`;
+      const sq = document.createElement('div');
+      sq.className = `sq ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+      sq.dataset.square = sqName;
+      sq.addEventListener('click', () => onSquareClick(sqName));
+      boardEl.appendChild(sq);
+      cellMap[sqName] = sq;
+    }
+  }
+
   function renderBoard(highlightSquares = []) {
-    boardEl.innerHTML = '';
     const boardState = game.board();
+    const legalTargets = selectedSq ? game.moves({ square: selectedSq, verbose: true }).map(m => m.to) : [];
+
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
         const sqName = `${String.fromCharCode(97 + c)}${8 - r}`;
-        const sq = document.createElement('div');
+        const sq = cellMap[sqName];
+        const piece = boardState[r][c];
+
         sq.className = `sq ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
-        sq.dataset.square = sqName;
         if (selectedSq === sqName) sq.classList.add('selected');
         if (highlightSquares.includes(sqName)) sq.classList.add('problem-zone');
-        const piece = boardState[r][c];
+        if (legalTargets.includes(sqName)) sq.classList.add('target-move');
+
         if (piece) {
           sq.textContent = GLYPHS[piece.color][piece.type];
           sq.classList.add(piece.color === 'w' ? 'p-w' : 'p-b');
+        } else {
+          sq.textContent = '';
         }
-        if (selectedSq) {
-          const moves = game.moves({ square: selectedSq, verbose: true });
-          if (moves.some(m => m.to === sqName)) sq.classList.add('target-move');
-        }
-        sq.addEventListener('click', () => onSquareClick(sqName));
-        boardEl.appendChild(sq);
       }
     }
   }
