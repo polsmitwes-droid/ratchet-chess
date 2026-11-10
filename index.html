@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Ratchet Chess</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#222326">
+  <style>
+    :root {
+      --bg-main: #141517;
+      --panel-bg: #1c1d21;
+      --sq-dark: #222326;
+      --sq-light: #8F9489;
+      --bronze: #d4a359;
+      --steel: #121315;
+      --steel-stroke: #737987;
+      --valve-active: #d94e34;
+      --valve-dim: #3a221e;
+      --highlight: rgba(212, 163, 89, 0.45);
+      --threat: rgba(217, 78, 52, 0.7);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: var(--bg-main);
+      color: #ccc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100dvh;
+      overflow: hidden;
+      padding: 6px 4px;
+    }
+    header, footer { width: 100%; max-width: 420px; }
+    .hud {
+      background: var(--panel-bg);
+      border: 1px solid #33363d;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    .hud-block { display: flex; flex-direction: column; }
+    .hud-label { font-size: 9px; letter-spacing: 1px; color: #777; font-weight: 700; text-transform: uppercase; }
+    .hud-val { font-size: 16px; font-weight: 800; color: #eee; font-family: monospace; }
+    .tubes { display: flex; gap: 6px; }
+    .nixie { width: 14px; height: 22px; background: #0a0a0c; border: 1px solid #444; border-radius: 3px; }
+    .nixie.active {
+      border-color: #ff6a00;
+      box-shadow: 0 0 8px #ff6a00;
+      background: radial-gradient(circle, #ff9900 20%, #4a1900 80%);
+    }
+    #status-line {
+      font-size: 11px;
+      color: #888;
+      text-align: center;
+      height: 16px;
+      line-height: 16px;
+      font-family: monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+      max-width: 420px;
+    }
+    #board-wrap {
+      width: 100vw;
+      max-width: 420px;
+      height: 100vw;
+      max-height: 420px;
+      position: relative;
+      background: #0f1012;
+      border: 3px solid #1c1d21;
+      box-shadow: inset 0 0 10px #000;
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      width: 100%; height: 100%;
+    }
+    .sq {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      font-size: calc(100vw / 9.6);
+      cursor: pointer;
+    }
+    @media (min-width: 420px) { .sq { font-size: 42px; } }
+    .sq.dark { background-color: var(--sq-dark); }
+    .sq.light { background-color: var(--sq-light); }
+    .sq.selected { background-color: var(--highlight) !important; }
+    .sq.target-move::after {
+      content: '';
+      position: absolute;
+      width: 26%;
+      height: 26%;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 50%;
+    }
+    .sq.problem-zone {
+      background-color: var(--threat) !important;
+      animation: pulse 0.9s infinite alternate ease-in-out;
+    }
+    @keyframes pulse { from { opacity: 0.7; } to { opacity: 1; } }
+    .p-w { color: var(--bronze); text-shadow: 0 1px 2px #000, 0 0 1px #fff; }
+    .p-b { color: var(--steel); -webkit-text-stroke: 1.2px var(--steel-stroke); text-shadow: 0 2px 4px #000; }
+    .controls { display: flex; gap: 8px; width: 100%; max-width: 420px; align-items: center; }
+    .btn-loft {
+      flex: 1; height: 44px; background: #26282e; color: #bbb;
+      border: 1px solid #41454f; border-radius: 4px; font-weight: 700;
+      text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;
+    }
+    .btn-loft:active { background: #18191c; }
+    .btn-valve {
+      flex: 1.4; height: 44px; background: var(--valve-dim); color: #664038;
+      border: 1px solid #52261e; border-radius: 4px; font-weight: 800;
+      font-size: 11px; letter-spacing: 0.5px; transition: all 0.25s ease;
+    }
+    .btn-valve.primed {
+      background: var(--valve-active); color: #fff; border-color: #ff6647;
+      box-shadow: 0 0 12px var(--valve-active); cursor: pointer;
+    }
+    .modal {
+      display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.85);
+      z-index: 50; flex-direction: column; justify-content: center; align-items: center;
+      padding: 20px;
+    }
+    .modal-box {
+      background: #1c1d21; border: 1px solid #444; padding: 20px; width: 85%;
+      text-align: center; border-radius: 6px; box-shadow: 0 0 20px #000;
+    }
+    .modal-title { font-size: 18px; color: var(--bronze); margin-bottom: 12px; font-weight: 800; }
+    .promo-choices { display: flex; justify-content: space-around; margin: 15px 0; }
+    .promo-opt { font-size: 38px; cursor: pointer; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+</head>
+<body>
+
+  <header>
+    <div class="hud">
+      <div class="hud-block">
+        <span class="hud-label">Планка ИИ</span>
+        <span class="hud-val" id="hud-elo">800</span>
+      </div>
+      <div class="hud-block">
+        <span class="hud-label">Глубина</span>
+        <span class="hud-val" id="hud-depth">2 ply</span>
+      </div>
+      <div class="hud-block" style="align-items: flex-end;">
+        <span class="hud-label">Клапаны</span>
+        <div class="tubes">
+          <div class="nixie active" id="tube-1"></div>
+          <div class="nixie active" id="tube-2"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="status-line">ИНИЦИАЛИЗАЦИЯ СИСТЕМЫ...</div>
+
+  <div id="board-wrap">
+    <div id="board"></div>
+    <div class="modal" id="modal-promo">
+      <div class="modal-box">
+        <div class="modal-title">ВЫБОР ФИГУРЫ</div>
+        <div class="promo-choices">
+          <span class="promo-opt p-w" data-p="q">♛&#xFE0E;</span>
+          <span class="promo-opt p-w" data-p="r">♜&#xFE0E;</span>
+          <span class="promo-opt p-w" data-p="b">♝&#xFE0E;</span>
+          <span class="promo-opt p-w" data-p="n">♞&#xFE0E;</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal" id="modal-gameover">
+      <div class="modal-box">
+        <div class="modal-title" id="go-title">ПАРТИЯ ЗАВЕРШЕНА</div>
+        <p id="go-desc" style="font-size: 13px; color: #999; margin-bottom: 15px; line-height: 1.4;"></p>
+        <button class="btn-loft" id="btn-restart" style="width: 100%;">НОВАЯ ПАРТИЯ</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="controls">
+      <button class="btn-loft" id="btn-resign">СДАЧА</button>
+      <button class="btn-valve" id="btn-valve" disabled>КЛАПАН (0.0)</button>
+    </div>
+  </footer>
+
+<script>
+(async () => {
+  const statusEl = document.getElementById('status-line');
+  if (typeof Chess === 'undefined') {
+    statusEl.textContent = 'ОШИБКА: chess.js не найден.';
+    return;
+  }
+
+  const workerCore = `
+  const PST = {
+    p: [
+      [ 0,  0,  0,  0,  0,  0,  0,  0],
+      [50, 50, 50, 50, 50, 50, 50, 50],
+      [10, 10, 20, 30, 30, 20, 10, 10],
+      [ 5,  5, 10, 25, 25, 10,  5,  5],
+      [ 0,  0,  0, 20, 20,  0,  0,  0],
+      [ 5, -5,-10,  0,  0,-10, -5,  5],
+      [ 5, 10, 10,-20,-20, 10, 10,  5],
+      [ 0,  0,  0,  0,  0,  0,  0,  0]
+    ],
+    n: [
+      [-50,-40,-30,-30,-30,-30,-40,-50],
+      [-40,-20,  0,  0,  0,  0,-20,-40],
+      [-30,  0, 10, 15, 15, 10,  0,-30],
+      [-30,  5, 15, 20, 20, 15,  5,-30],
+      [-30,  0, 15, 20, 20, 15,  0,-30],
+      [-30,  5, 10, 15, 15, 10,  5,-30],
+      [-40,-20,  0,  5,  5,  0,-20,-40],
+      [-50,-40,-30,-30,-30,-30,-40,-50]
+    ],
+    b: [
+      [-20,-10,-10,-10,-10,-10,-10,-20],
+      [-10,  0,  0,  0,  0,  0,  0,-10],
+      [-10,  0,  5, 10, 10,  5,  0,-10],
+      [-10,  5,  5, 10, 10,  5,  5,-10],
+      [-10,  0, 10, 10, 10, 10,  0,-10],
+      [-10, 10, 10, 10, 10, 10, 10,-10],
+      [-10,  5,  0,  0,  0,  0,  5,-10],
+      [-20,-10,-10,-10,-10,-10,-10,-20]
+    ],
+    r: [
+      [  0,  0,  0,  0,  0,  0,  0,  0],
+      [  5, 10, 10, 10, 10, 10, 10,  5],
+      [ -5,  0,  0,  0,  0,  0,  0, -5],
+      [ -5,  0,  0,  0,  0,  0,  0, -5],
+      [ -5,  0,  0,  0,  0,  0,  0, -5],
+      [ -5,  0,  0,  0,  0,  0,  0, -5],
+      [ -5,  0,  0,  0,  0,  0,  0, -5],
+      [  0,  0,  0,  5,  5,  0,  0,  0]
+    ],
+    q: [
+      [-20,-10,-10, -5, -5,-10,-10,-20],
+      [-10,  0,  0,  0,  0,  0,  0,-10],
+      [-10,  0,  5,  5,  5,  5,  0,-10],
+      [ -5,  0,  5,  5,  5,  5,  0, -5],
+      [  0,  0,  5,  5,  5,  5,  0, -5],
+      [-10,  5,  5,  5,  5,  5,  0,-10],
+      [-10,  0,  5,  0,  0,  0,  0,-10],
+      [-20,-10,-10, -5, -5,-10,-10,-20]
+    ],
+    k: [
+      [-30,-40,-40,-50,-50,-40,-40,-30],
+      [-30,-40,-40,-50,-50,-40,-40,-30],
+      [-30,-40,-40,-50,-50,-40,-40,-30],
+      [-30,-40,-40,-50,-50,-40,-40,-30],
+      [-20,-30,-30,-40,-40,-30,-30,-20],
+      [-10,-20,-20,-20,-20,-20,-20,-10],
+      [ 20, 20,  0,  0,  0,  0, 20, 20],
+      [ 20, 30, 10,  0,  0, 10, 30, 20]
+    ]
+  };
+
+  const VALS = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
+
+  function evaluate(game, elo) {
+    if (game.in_checkmate()) return game.turn() === 'w' ? -99999 : 99999;
+    if (game.in_draw()) return 0;
+    let score = 0;
+    const board = game.board();
+    const isAggro = elo >= 1400;
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const p = board[r][c];
+        if (!p) continue;
+        const base = VALS[p.type];
+        const pstVal = p.color === 'w' ? PST[p.type][r][c] : PST[p.type][7 - r][c];
+        const val = base + pstVal;
+        score += (p.color === 'w' ? val : -val);
+      }
+    }
+    if (isAggro && game.history().length < 16) {
+      score += (game.turn() === 'b' ? 25 : -25);
+    }
+    return score;
+  }
+
+  function quiescence(game, alpha, beta, maxQ) {
+    const standPat = evaluate(game, 1500);
+    if (maxQ <= 0) return standPat;
+    if (game.turn() === 'w') {
+      if (standPat >= beta) return beta;
+      if (standPat > alpha) alpha = standPat;
+    } else {
+      if (standPat <= alpha) return alpha;
+      if (standPat < beta) beta = standPat;
+    }
+    const moves = game.moves({ verbose: true }).filter(m => m.captured);
+    moves.sort((a,b) => (VALS[b.captured] || 0) - (VALS[a.captured] || 0));
+    for (let m of moves) {
+      game.move(m);
+      const score = quiescence(game, alpha, beta, maxQ - 1);
+      game.undo();
+      if (game.turn() === 'w') {
+        if (score >= beta) return beta;
+        if (score > alpha) alpha = score;
+      } else {
+        if (score <= alpha) return alpha;
+        if (score < beta) beta = score;
+      }
+    }
+    return game.turn() === 'w' ? alpha : beta;
+  }
+
+  function minimax(game, depth, alpha, beta, isMax, maxTime, start, elo) {
+    if (Date.now() - start > maxTime) return null;
+    if (depth === 0 || game.game_over()) return quiescence(game, alpha, beta, 2);
+    let moves = game.moves({ verbose: true });
+    moves.sort((a,b) => {
+      let sa = a.captured ? (VALS[a.captured] * 10 - VALS[a.piece]) : 0;
+      let sb = b.captured ? (VALS[b.captured] * 10 - VALS[b.piece]) : 0;
+      return sb - sa;
+    });
+    let best = isMax ? -Infinity : Infinity;
+    for (let m of moves) {
+      game.move(m);
+      let score = minimax(game, depth - 1, alpha, beta, !isMax, maxTime, start, elo);
+      game.undo();
+      if (score === null) return null;
+      if (isMax) {
+        best = Math.max(best, score);
+        alpha = Math.max(alpha, best);
+      } else {
+        best = Math.min(best, score);
+        beta = Math.min(beta, best);
+      }
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+
+  self.onmessage = (e) => {
+    const { fen, elo, maxDepth, timeLimit } = e.data;
+    const game = new Chess(fen);
+    const start = Date.now();
+    const legalMoves = game.moves({ verbose: true });
+    if (legalMoves.length === 0) {
+      self.postMessage({ bestMove: null, evaluation: 0.0 });
+      return;
+    }
+    let bestMove = legalMoves[0];
+    let evalScore = 0;
+    let scoredMoves = [];
+
+    for (let d = 1; d <= maxDepth; d++) {
+      let currentBest = null;
+      let alpha = -Infinity;
+      let beta = Infinity;
+      let cancel = false;
+      let iterMoves = [];
+      for (let m of legalMoves) {
+        game.move(m);
+        let score = minimax(game, d - 1, alpha, beta, true, timeLimit, start, elo);
+        game.undo();
+        if (score === null) { cancel = true; break; }
+        iterMoves.push({ move: m, score: score });
+        if (score < beta) {
+          beta = score;
+          currentBest = m;
+          evalScore = score;
+        }
+      }
+      if (cancel) break;
+      if (currentBest) bestMove = currentBest;
+      scoredMoves = iterMoves;
+      if (Date.now() - start > timeLimit) break;
+    }
+
+    if (elo < 1200 && scoredMoves.length > 1) {
+      scoredMoves.sort((a, b) => a.score - b.score);
+      const safeMoves = scoredMoves.filter(item => {
+        const m = item.move;
+        return !(m.piece === 'q' && m.captured === undefined && item.score > evalScore + 400);
+      });
+      const pool = safeMoves.slice(0, Math.min(3, safeMoves.length));
+      if (pool.length > 0 && Math.random() < ((1200 - elo) / 1200) * 0.45) {
+        bestMove = pool[Math.floor(Math.random() * pool.length)].move;
+      }
+    }
+    if (!bestMove) bestMove = legalMoves[0];
+    self.postMessage({ bestMove, evaluation: evalScore / 100 });
+  };
+  `;
+
+  let worker = null;
+  try {
+    const cdnUrl = 'https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js';
+    const resp = await fetch(cdnUrl);
+    if (!resp.ok) throw new Error('CDN status: ' + resp.status);
+    const chessJsText = await resp.text();
+    const fullWorkerCode = chessJsText + '\n;\n' + workerCore;
+    const blob = new Blob([fullWorkerCode], { type: 'application/javascript' });
+    worker = new Worker(URL.createObjectURL(blob));
+  } catch (err) {
+    statusEl.textContent = 'ОШИБКА: Автономный воркер не собран. Требуется сеть.';
+    return;
+  }
+
+  const GLYPHS = {
+    w: { p:'♟\uFE0E', n:'♞\uFE0E', b:'♝\uFE0E', r:'♜\uFE0E', q:'♛\uFE0E', k:'♚\uFE0E' },
+    b: { p:'♟\uFE0E', n:'♞\uFE0E', b:'♝\uFE0E', r:'♜\uFE0E', q:'♛\uFE0E', k:'♚\uFE0E' }
+  };
+  const VAL_PIECES = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
+
+  let game = new Chess();
+  let selectedSq = null;
+  let valveCharges = 2;
+  let currentEval = 0.0;
+  let engineBusy = false;
+  let pendingPromo = null;
+
+  function loadElo() {
+    try {
+      const v = localStorage.getItem('r_chess_elo');
+      return v ? parseInt(v, 10) : 800;
+    } catch(e) { return 800; }
+  }
+  function saveElo(v) {
+    try { localStorage.setItem('r_chess_elo', Math.max(loadElo(), v)); } catch(e) {}
+  }
+  let elo = loadElo();
+
+  function getDepth(e) {
+    if (e < 1100) return 2;
+    if (e < 1500) return 3;
+    if (e < 1800) return 4;
+    return 5;
+  }
+
+  const boardEl = document.getElementById('board');
+  const hudElo = document.getElementById('hud-elo');
+  const hudDepth = document.getElementById('hud-depth');
+  const tube1 = document.getElementById('tube-1');
+  const tube2 = document.getElementById('tube-2');
+  const btnValve = document.getElementById('btn-valve');
+  const btnResign = document.getElementById('btn-resign');
+  const promoModal = document.getElementById('modal-promo');
+  const goModal = document.getElementById('modal-gameover');
+  const goTitle = document.getElementById('go-title');
+  const goDesc = document.getElementById('go-desc');
+  const btnRestart = document.getElementById('btn-restart');
+
+  function updateHUD() {
+    hudElo.textContent = elo;
+    hudDepth.textContent = `${getDepth(elo)} ply`;
+    tube1.className = `nixie ${valveCharges >= 1 ? 'active' : ''}`;
+    tube2.className = `nixie ${valveCharges >= 2 ? 'active' : ''}`;
+    const primed = (valveCharges > 0) && (currentEval <= -3.0) && (game.turn() === 'w') && !engineBusy;
+    btnValve.disabled = !primed;
+    btnValve.className = `btn-valve ${primed ? 'primed' : ''}`;
+    btnValve.textContent = `КЛАПАН (${currentEval > 0 ? '+' : ''}${currentEval.toFixed(1)})`;
+  }
+
+  function renderBoard(highlightSquares = []) {
+    boardEl.innerHTML = '';
+    const boardState = game.board();
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const sqName = `${String.fromCharCode(97 + c)}${8 - r}`;
+        const sq = document.createElement('div');
+        sq.className = `sq ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+        sq.dataset.square = sqName;
+        if (selectedSq === sqName) sq.classList.add('selected');
+        if (highlightSquares.includes(sqName)) sq.classList.add('problem-zone');
+        const piece = boardState[r][c];
+        if (piece) {
+          sq.textContent = GLYPHS[piece.color][piece.type];
+          sq.classList.add(piece.color === 'w' ? 'p-w' : 'p-b');
+        }
+        if (selectedSq) {
+          const moves = game.moves({ square: selectedSq, verbose: true });
+          if (moves.some(m => m.to === sqName)) sq.classList.add('target-move');
+        }
+        sq.addEventListener('click', () => onSquareClick(sqName));
+        boardEl.appendChild(sq);
+      }
+    }
+  }
+
+  function onSquareClick(sq) {
+    if (engineBusy || game.game_over()) return;
+    if (selectedSq === sq) {
+      selectedSq = null;
+      renderBoard();
+      return;
+    }
+    const piece = game.get(sq);
+    if (piece && piece.color === 'w') {
+      selectedSq = sq;
+      renderBoard();
+      return;
+    }
+    if (selectedSq) {
+      const moves = game.moves({ square: selectedSq, verbose: true });
+      const move = moves.find(m => m.to === sq);
+      if (move) {
+        if (move.flags.includes('p')) {
+          pendingPromo = { from: selectedSq, to: sq };
+          promoModal.style.display = 'flex';
+        } else {
+          executeMove({ from: selectedSq, to: sq });
+        }
+      } else {
+        selectedSq = null;
+        renderBoard();
+      }
+    }
+  }
+
+  function executeMove(m) {
+    game.move(m);
+    selectedSq = null;
+    renderBoard();
+    checkGameOver();
+    if (!game.game_over() && game.turn() === 'b') {
+      engineBusy = true;
+      statusEl.textContent = 'ДВИЖОК ВЫЧИСЛЯЕТ...';
+      updateHUD();
+      worker.postMessage({
+        fen: game.fen(),
+        elo: elo,
+        maxDepth: getDepth(elo),
+        timeLimit: 1200
+      });
+    }
+  }
+
+  worker.onmessage = (e) => {
+    const { bestMove, evaluation } = e.data;
+    currentEval = evaluation;
+    engineBusy = false;
+    if (bestMove) game.move(bestMove);
+    renderBoard();
+    statusEl.textContent = 'ВАШ ХОД (БЕЛЫЕ)';
+    checkGameOver();
+    updateHUD();
+  };
+
+  btnValve.addEventListener('click', () => {
+    if (valveCharges <= 0 || currentEval > -3.0 || game.turn() !== 'w' || engineBusy) return;
+    const problemSquares = [];
+
+    if (game.in_check()) {
+      const b = game.board();
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const p = b[r][c];
+          if (p && p.type === 'k' && p.color === 'w') {
+            problemSquares.push(`${String.fromCharCode(97 + c)}${8 - r}`);
+          }
+        }
+      }
+      valveCharges--;
+      renderBoard(problemSquares);
+      statusEl.textContent = 'ТРЕВОГА: ВАШ КОРОЛЬ ПОД ШАХОМ!';
+      updateHUD();
+      return;
+    }
+
+    let mateThreat = false;
+    const tokens = game.fen().split(' ');
+    tokens[1] = 'b';
+    tokens[3] = '-';
+    try {
+      const simB = new Chess(tokens.join(' '));
+      const bMoves = simB.moves({ verbose: true });
+      for (let bm of bMoves) {
+        simB.move(bm);
+        if (simB.in_checkmate()) {
+          problemSquares.push(bm.to);
+          mateThreat = true;
+          simB.undo();
+          break;
+        }
+        simB.undo();
+      }
+    } catch(err) {}
+
+    if (mateThreat) {
+      valveCharges--;
+      renderBoard(problemSquares);
+      statusEl.textContent = 'ТРЕВОГА: ПРЯМАЯ УГРОЗА МАТА!';
+      updateHUD();
+      return;
+    }
+
+    const simB = new Chess(tokens.join(' '));
+    const allBlackCaptures = simB.moves({ verbose: true }).filter(m => m.captured);
+
+    for (let bMove of allBlackCaptures) {
+      const sq = bMove.to;
+      const victim = game.get(sq);
+      if (!victim || victim.color !== 'w') continue;
+      const attackerVal = VAL_PIECES[bMove.piece] || 100;
+      const victimVal = VAL_PIECES[victim.type] || 100;
+
+      simB.move(bMove);
+      const whiteResponses = simB.moves({ verbose: true });
+      const canRecapture = whiteResponses.some(wm => wm.to === sq);
+      simB.undo();
+
+      if (!canRecapture || attackerVal < victimVal) {
+        if (!problemSquares.includes(sq)) problemSquares.push(sq);
+      }
+    }
+
+    if (problemSquares.length > 0) {
+      valveCharges--;
+      renderBoard(problemSquares);
+      statusEl.textContent = 'ЗОНА ПОТЕРИ МАТЕРИАЛА ПОДСВЕЧЕНА';
+      updateHUD();
+    } else {
+      statusEl.textContent = 'Прямых угроз нет, проблема позиционная';
+    }
+  });
+
+  document.querySelectorAll('.promo-opt').forEach(opt => {
+    opt.addEventListener('click', (e) => {
+      const p = e.target.dataset.p;
+      promoModal.style.display = 'none';
+      if (pendingPromo) {
+        executeMove({ from: pendingPromo.from, to: pendingPromo.to, promotion: p });
+        pendingPromo = null;
+      }
+    });
+  });
+
+  function checkGameOver() {
+    let title = '', desc = '';
+    let finished = false;
+    const moveCount = game.history().length;
+
+    if (game.in_checkmate()) {
+      finished = true;
+      if (game.turn() === 'b') {
+        title = 'ПОБЕДА';
+        desc = 'Тактическая победа. Эскалация сложности: +100 ELO.';
+        elo += 100;
+        saveElo(elo);
+      } else {
+        title = 'ПОРАЖЕНИЕ';
+        desc = 'Конструкция разрушена. Планка зафиксирована без отката.';
+      }
+    } else if (game.in_draw() || game.in_threefold_repetition() || game.insufficient_material() || game.in_stalemate()) {
+      finished = true;
+      title = 'НИЧЬЯ';
+      if (moveCount >= 30) {
+        desc = `Стойкость (${moveCount} ходов). Фиксация стабильности: +50 ELO.`;
+        elo += 50;
+        saveElo(elo);
+      } else {
+        desc = `Ничья на ${moveCount} ходу (<30). Очки ELO не начислены.`;
+      }
+    }
+
+    if (finished) {
+      goTitle.textContent = title;
+      goDesc.textContent = desc;
+      goModal.style.display = 'flex';
+      updateHUD();
+    }
+  }
+
+  btnResign.addEventListener('click', () => {
+    if (game.game_over() || engineBusy) return;
+    goTitle.textContent = 'СДАЧА';
+    goDesc.textContent = 'Партия прервана. Планка сложности не снижается.';
+    goModal.style.display = 'flex';
+  });
+
+  btnRestart.addEventListener('click', () => {
+    game.reset();
+    valveCharges = 2;
+    currentEval = 0.0;
+    engineBusy = false;
+    selectedSq = null;
+    goModal.style.display = 'none';
+    statusEl.textContent = 'ХОД БЕЛЫХ';
+    renderBoard();
+    updateHUD();
+  });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+
+  renderBoard();
+  statusEl.textContent = 'ХОД БЕЛЫХ';
+  updateHUD();
+})();
+</script>
+</body>
+</html>

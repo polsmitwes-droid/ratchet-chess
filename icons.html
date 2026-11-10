@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Генератор иконок Ratchet Chess</title>
+  <style>
+    body { background: #141517; color: #ccc; font-family: sans-serif; text-align: center; padding: 20px; }
+    canvas { border: 1px solid #444; margin: 10px; border-radius: 12px; }
+    button { background: #d4a359; border: none; padding: 10px 16px; font-weight: bold; margin: 6px; border-radius: 4px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h2>Генератор иконок PWA</h2>
+  <canvas id="c192" width="192" height="192"></canvas><br>
+  <button onclick="downloadIcon(192)">Скачать icon-192.png</button><br><br>
+  <canvas id="c512" width="512" height="512"></canvas><br>
+  <button onclick="downloadIcon(512)">Скачать icon-512.png</button>
+  <script>
+    function drawIcon(canvasId, size) {
+      const cvs = document.getElementById(canvasId);
+      const ctx = cvs.getContext('2d');
+      const r = size * 0.18;
+      ctx.fillStyle = '#222326';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, size, size, r);
+      ctx.fill();
+      ctx.strokeStyle = '#8F9489';
+      ctx.lineWidth = size * 0.02;
+      ctx.beginPath();
+      ctx.roundRect(size * 0.06, size * 0.06, size * 0.88, size * 0.88, r * 0.8);
+      ctx.stroke();
+      ctx.fillStyle = '#d4a359';
+      ctx.font = `${Math.floor(size * 0.58)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('♞', size * 0.5, size * 0.52);
+      ctx.fillStyle = '#d94e34';
+      ctx.beginPath();
+      ctx.arc(size * 0.8, size * 0.2, size * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    function downloadIcon(size) {
+      const cvs = document.getElementById(`c${size}`);
+      const link = document.createElement('a');
+      link.download = `icon-${size}.png`;
+      link.href = cvs.toDataURL('image/png');
+      link.click();
+    }
+    drawIcon('c192', 192);
+    drawIcon('c512', 512);
+  </script>
+</body>
+</html>
